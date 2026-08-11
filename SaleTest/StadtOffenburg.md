@@ -1,8 +1,12 @@
-Tag erstgespraech
+Colomn_Name: erstgespraech
+
+**Visable**:
 Firmenname: Stad Offenburg
 Erstkontakt_Date: 
 Letzter kontakt
 Lead_origin: 
+
+**Hidden**:
 Kontaktperson: 
 	kontaktperson 1: 
 		name

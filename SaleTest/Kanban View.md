@@ -1,5 +1,14 @@
 ---
-kanban_plugin: >-
-  {"columns":[{"id":"column-soonish","label":"Erstgespreach","matchMode":"name","matchTags":[]},{"id":"column-next-week","label":"FollowUp_Send","matchMode":"name","matchTags":[]},{"id":"column-this-week","label":"2.Gespreach","matchMode":"name","matchTags":[]},{"id":"column-new-column","label":"next_Beteungstermin","matchMode":"name","matchTags":[]}],"doneColumnName":"","lastUsedTaskFile":"SaleTest/StadtOffenburg.md"}
+client_kanban: true
+source_folder: SaleTest
+stage_property: sales_stage
+columns:
+  - Erstgespraech
+  - FollowUp_Send
+  - Zweitgespraech
+  - Naechster_Betreuungstermin
+card_fields:
+  - contact_person
+  - last_contact
+  - next_appointment
 ---
-

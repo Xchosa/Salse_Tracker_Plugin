@@ -1,0 +1,11 @@
+{
+  "id": "client-kanban",
+  "name": "Client Kanban",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.3",
+  "description": "A kanban view for client notes.",
+  "author": "",
+  "authorUrl": "",
+  "fundingUrl": "",
+  "isDesktopOnly": false
+}

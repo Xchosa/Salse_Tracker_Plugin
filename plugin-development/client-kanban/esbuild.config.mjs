@@ -1,5 +1,6 @@
 import esbuild from "esbuild";
 import builtinModules from "builtin-modules";
+import { rename } from "node:fs/promises";
 
 const production = process.argv[2] === "production";
 
@@ -15,3 +16,5 @@ await esbuild.build({
   treeShaking: true,
   logLevel: "info"
 });
+
+await rename("main.css", "styles.css");

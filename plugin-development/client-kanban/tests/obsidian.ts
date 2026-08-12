@@ -2,9 +2,60 @@ export class Plugin {}
 
 export class PluginSettingTab {}
 
-export class ItemView {}
+type CreateOptions = {
+  cls?: string;
+  text?: string;
+  attr?: Record<string, string>;
+};
 
-export class Notice {}
+function decorateElement<T extends HTMLElement>(element: T): T {
+  Object.assign(element, {
+    createDiv(options: CreateOptions = {}) {
+      return appendElement(element, "div", options);
+    },
+    createEl(tag: string, options: CreateOptions = {}) {
+      return appendElement(element, tag, options);
+    },
+    empty() {
+      element.replaceChildren();
+    }
+  });
+  return element;
+}
+
+function appendElement(parent: HTMLElement, tag: string, options: CreateOptions): HTMLElement {
+  const element = decorateElement(document.createElement(tag));
+  if (options.cls) element.className = options.cls;
+  if (options.text !== undefined) element.textContent = options.text;
+  for (const [name, value] of Object.entries(options.attr ?? {})) element.setAttribute(name, value);
+  parent.appendChild(element);
+  return element;
+}
+
+export class ItemView {
+  app: unknown;
+  contentEl: HTMLElement;
+
+  constructor(public leaf: unknown) {
+    this.contentEl = decorateElement(document.createElement("div"));
+  }
+}
+
+export class Notice {
+  constructor(message: string) {
+    notices.push(message);
+  }
+}
+
+const notices: string[] = [];
+
+export function recordedNotices(): string[] {
+  return notices;
+}
+
+export function clearNotices(): void {
+  notices.length = 0;
+}
 
 export class TAbstractFile {
   path: string;

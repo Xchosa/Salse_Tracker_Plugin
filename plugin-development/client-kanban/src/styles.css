@@ -13,6 +13,14 @@
   padding: var(--size-4-3);
 }
 
+.client-kanban-view .client-kanban-card-list {
+  box-sizing: border-box;
+  min-height: 5rem;
+  padding: 0.25rem;
+  background: var(--background-primary);
+  border-radius: var(--radius-s);
+}
+
 .client-kanban-view .client-kanban-card {
   background: var(--background-primary);
   border: 1px solid var(--background-modifier-border);

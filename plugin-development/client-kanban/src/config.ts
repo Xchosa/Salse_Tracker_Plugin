@@ -9,6 +9,10 @@ export function parseBoardConfig(
   const columns = frontmatter?.columns;
   const cardFields = frontmatter?.card_fields;
 
+  if (frontmatter?.client_kanban !== true) {
+    errors.push("client_kanban must be true to use this note as a Client Kanban board");
+  }
+
   if (typeof sourceFolder !== "string" || sourceFolder.trim().length === 0) {
     errors.push("source_folder must be a non-empty string");
   }

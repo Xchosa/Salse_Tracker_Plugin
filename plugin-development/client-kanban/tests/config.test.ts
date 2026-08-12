@@ -17,6 +17,29 @@ describe("parseBoardConfig", () => {
     }});
   });
 
+  it.each<{ marker: string; frontmatter: Record<string, unknown> | undefined }>([
+    { marker: "missing frontmatter", frontmatter: undefined },
+    {
+      marker: "absent",
+      frontmatter: { source_folder: "SaleTest", stage_property: "sales_stage", columns: ["New"] }
+    },
+    {
+      marker: "false",
+      frontmatter: { client_kanban: false, source_folder: "SaleTest", stage_property: "sales_stage", columns: ["New"] }
+    },
+    {
+      marker: "a string",
+      frontmatter: { client_kanban: "true", source_folder: "SaleTest", stage_property: "sales_stage", columns: ["New"] }
+    }
+  ])("requires client_kanban to be strictly true when the marker is $marker", ({ frontmatter }) => {
+    const result = parseBoardConfig(frontmatter);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.errors).toContain("client_kanban must be true to use this note as a Client Kanban board");
+    }
+  });
+
   it.each([
     [{ client_kanban: true, stage_property: "sales_stage", columns: ["New"] }, "source_folder"],
     [{ client_kanban: true, source_folder: "SaleTest", columns: ["New"] }, "stage_property"],

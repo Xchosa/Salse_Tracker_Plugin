@@ -75,6 +75,26 @@ describe("ClientRepository", () => {
     expect(records.map((record) => record.path)).toEqual(["SaleTest/Max.md"]);
   });
 
+  it("sorts multiple shuffled direct Markdown clients by path", async () => {
+    const app = fakeApp({
+      folders: {
+        SaleTest: folder("SaleTest", [
+          file("SaleTest/Zed.md", { client_name: "Zed" }),
+          file("SaleTest/Alpha.md", { client_name: "Alpha" }),
+          file("SaleTest/Middle.md", { client_name: "Middle" })
+        ])
+      }
+    });
+
+    const records = await repository(app).list(config);
+
+    expect(records.map((record) => record.path)).toEqual([
+      "SaleTest/Alpha.md",
+      "SaleTest/Middle.md",
+      "SaleTest/Zed.md"
+    ]);
+  });
+
   it("reports a missing source folder", async () => {
     const app = fakeApp({ folders: {} });
 

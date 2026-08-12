@@ -54,3 +54,17 @@ next_appointment: 2026-08-20
 
 Detailed notes and contact history remain in the Markdown body.
 ```
+
+## Manual smoke checklist
+
+After building and deploying the plugin, verify the following in Obsidian:
+
+1. Open a configured board and confirm its direct Markdown clients render in filename order with the configured fields.
+2. Click a card and confirm Obsidian opens the matching client note.
+3. Drag a card to a configured column and to **Uncategorized**; confirm only the configured stage property changes or is removed.
+4. Leave a configured column empty, confirm its card-list area remains visible and easy to target, and drag a card into it with both a pointer and touch input.
+5. Open two Client Kanban boards side by side and confirm a card cannot be dragged from one board into the other.
+6. Give a client an unknown stage, release its Uncategorized card within that same list, and confirm the unknown YAML value and repository-defined card order remain unchanged.
+7. Remove `client_kanban: true` while its board view is open and confirm the view replaces the board with an actionable configuration error.
+8. Rename the board note while its view is open and confirm the view refreshes and survives a workspace reload at the renamed path.
+9. Create, edit, rename, and delete a direct client note and confirm the board refreshes; repeat with an unrelated or nested note and confirm it does not.

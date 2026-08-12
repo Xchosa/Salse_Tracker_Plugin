@@ -7,6 +7,8 @@ import { ClientRepository } from "./client-repository";
 
 export const CLIENT_KANBAN_VIEW_TYPE = "client-kanban-view";
 
+let nextSortableGroupId = 0;
+
 type Repository = Pick<ClientRepository, "list" | "setStage">;
 type RepositoryFactory = (app: App) => Repository;
 type SortableFactory = (element: HTMLElement, options: Sortable.Options) => Sortable;
@@ -24,6 +26,7 @@ type ObsidianElement = HTMLElement & {
 export class ClientKanbanView extends ItemView {
   private readonly repository: Repository;
   private readonly sortableFactory: SortableFactory;
+  private readonly sortableGroup = `client-kanban-cards-${++nextSortableGroupId}`;
   private sortables: Sortable[] = [];
   private refreshToken = 0;
   private closed = false;
@@ -141,12 +144,20 @@ export class ClientKanbanView extends ItemView {
       }
 
       this.sortables.push(this.sortableFactory(list, {
-        group: "client-kanban-cards",
+        group: this.sortableGroup,
         draggable: ".client-kanban-card",
         delayOnTouchOnly: true,
         delay: 150,
         touchStartThreshold: 4,
         onEnd: async (event) => {
+          if (!this.contentEl.contains(event.to)) {
+            await this.refresh();
+            return;
+          }
+          if (event.from === event.to) {
+            await this.refresh();
+            return;
+          }
           const path = event.item.dataset.path;
           if (!path) return;
           const stage = event.to.dataset.stage || null;
@@ -184,7 +195,9 @@ export class ClientKanbanView extends ItemView {
     this.trackEvent(vault, vault.on("modify", (file) => this.scheduleRefresh(file.path)));
     this.trackEvent(vault, vault.on("delete", (file) => this.scheduleRefresh(file.path)));
     this.trackEvent(vault, vault.on("rename", (file, oldPath) => {
-      if (this.isRelevant(file.path) || this.isRelevant(oldPath)) this.scheduleRefresh();
+      const boardRenamed = oldPath === this.boardPath;
+      if (boardRenamed) this.boardPath = file.path;
+      if (boardRenamed || this.isRelevant(file.path) || this.isRelevant(oldPath)) this.scheduleRefresh();
     }));
     const metadataCache = this.app.metadataCache;
     this.trackEvent(metadataCache, metadataCache.on("changed", (file) => this.scheduleRefresh(file.path)));

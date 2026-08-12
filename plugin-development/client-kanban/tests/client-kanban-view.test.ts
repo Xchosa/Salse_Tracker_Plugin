@@ -139,11 +139,13 @@ function openFileSpy(app: ReturnType<typeof fakeApp>): ReturnType<typeof vi.fn> 
 async function drop(harness: Harness, path: string, stage: string | null): Promise<void> {
   const item = card(harness.view);
   item.dataset.path = path;
+  const source = item.parentElement;
+  if (!source) throw new Error("source list not found");
   const destination = harness.view.contentEl.querySelector<HTMLElement>(`.client-kanban-card-list[data-stage="${stage ?? ""}"]`);
   if (!destination) throw new Error("destination list not found");
   const handler = harness.dropHandlers[0];
   if (!handler) throw new Error("drop handler not found");
-  await handler({ item, to: destination } as Sortable.SortableEvent);
+  await handler({ item, from: source, to: destination } as Sortable.SortableEvent);
 }
 
 beforeEach(() => clearNotices());
@@ -167,6 +169,16 @@ describe("ClientKanbanView", () => {
     expect(card(view).dataset.path).toBe("SaleTest/Max.md");
   });
 
+  it("keeps every empty column as an active card-list drop destination", async () => {
+    const board = harness({ records: [client("SaleTest/Max.md", { sales_stage: "New" })] });
+
+    await board.view.refresh();
+
+    const lists = [...board.view.contentEl.querySelectorAll<HTMLElement>(".client-kanban-card-list")];
+    expect(lists.map((list) => list.childElementCount)).toEqual([0, 1, 0]);
+    expect(board.sortableFactory.mock.calls.map((call) => call[0])).toEqual(lists);
+  });
+
   it("renders the board beneath the scoped view root across reopen", async () => {
     const { view } = harness();
 
@@ -187,6 +199,7 @@ describe("ClientKanbanView", () => {
     const clientFile = new TFile("SaleTest/Max.md");
     const board = Object.assign(new TFile("SaleTest/Board.md"), {
       frontmatter: {
+        client_kanban: true,
         source_folder: "SaleTest",
         stage_property: "sales_stage",
         columns: ["New", "Contacted"],
@@ -206,6 +219,7 @@ describe("ClientKanbanView", () => {
     const { view, app } = harness();
     const replacementBoard = Object.assign(new TFile("SaleTest/Replacement.md"), {
       frontmatter: {
+        client_kanban: true,
         source_folder: "SaleTest",
         stage_property: "sales_stage",
         columns: ["New", "Contacted"],
@@ -253,6 +267,29 @@ describe("ClientKanbanView", () => {
     expect(board.repository.setStage).toHaveBeenCalledWith("SaleTest/Max.md", "sales_stage", null);
   });
 
+  it("preserves an unknown stage when released within Uncategorized and restores repository order", async () => {
+    const board = harness({ records: [
+      client("SaleTest/Alpha.md", { client_name: "Alpha", sales_stage: "Legacy" }),
+      client("SaleTest/Beta.md", { client_name: "Beta", sales_stage: "Archived" })
+    ] });
+    await board.view.refresh();
+    const uncategorized = board.view.contentEl.querySelector<HTMLElement>(
+      '.client-kanban-card-list[data-stage=""]'
+    );
+    const alpha = board.view.contentEl.querySelector<HTMLElement>(
+      '.client-kanban-card[data-path="SaleTest/Alpha.md"]'
+    );
+    const handler = board.dropHandlers[0];
+    if (!uncategorized || !alpha || !handler) throw new Error("same-list fixture not found");
+    uncategorized.append(alpha);
+
+    await handler({ item: alpha, from: uncategorized, to: uncategorized } as Sortable.SortableEvent);
+
+    expect(board.repository.setStage).not.toHaveBeenCalled();
+    expect(board.repository.list).toHaveBeenCalledTimes(2);
+    expect(labels(board.view, ".client-kanban-card-title")).toEqual(["Alpha", "Beta"]);
+  });
+
   it("notifies and refreshes from disk when a write fails", async () => {
     const board = harness({ setStageError: new Error("write failed") });
     await board.view.refresh();
@@ -270,18 +307,51 @@ describe("ClientKanbanView", () => {
 
     expect(board.sortableFactory).toHaveBeenCalledTimes(3);
     expect(board.sortableFactory.mock.calls[0]?.[1]).toMatchObject({
-      group: "client-kanban-cards",
       draggable: ".client-kanban-card",
       delayOnTouchOnly: true,
       delay: 150,
       touchStartThreshold: 4
     });
+    const group = board.sortableFactory.mock.calls[0]?.[1].group;
+    expect(group).toEqual(expect.any(String));
+    expect(board.sortableFactory.mock.calls.map((call) => call[1].group)).toEqual([group, group, group]);
 
     await board.view.refresh();
     expect(board.sortableDestroy).toHaveBeenCalledTimes(3);
 
     await board.view.onClose();
     expect(board.sortableDestroy).toHaveBeenCalledTimes(6);
+  });
+
+  it("isolates card drag groups between two board views", async () => {
+    const first = harness({ boardPath: "Boards/First.md" });
+    const second = harness({ boardPath: "Boards/Second.md" });
+
+    await first.view.refresh();
+    await second.view.refresh();
+
+    const firstGroups = first.sortableFactory.mock.calls.map((call) => call[1].group);
+    const secondGroups = second.sortableFactory.mock.calls.map((call) => call[1].group);
+    expect(new Set(firstGroups).size).toBe(1);
+    expect(new Set(secondGroups).size).toBe(1);
+    expect(firstGroups[0]).not.toBe(secondGroups[0]);
+  });
+
+  it("rejects a drop destination outside its own view and restores the board", async () => {
+    const board = harness({ records: [client("SaleTest/Max.md", { sales_stage: "New" })] });
+    await board.view.refresh();
+    const handler = board.dropHandlers[0];
+    if (!handler) throw new Error("drop handler not found");
+    const outside = document.createElement("div");
+    outside.dataset.stage = "Contacted";
+    const item = card(board.view);
+    const source = item.parentElement;
+    if (!source) throw new Error("outside-drop source not found");
+
+    await handler({ item, from: source, to: outside } as unknown as Sortable.SortableEvent);
+
+    expect(board.repository.setStage).not.toHaveBeenCalled();
+    expect(board.repository.list).toHaveBeenCalledTimes(2);
   });
 
   it("renders only the latest concurrent refresh", async () => {
@@ -418,6 +488,33 @@ describe("ClientKanbanView", () => {
     }
   });
 
+  it("renders an actionable configuration error when the board marker is removed", async () => {
+    vi.useFakeTimers();
+    try {
+      const board = harness();
+      await board.view.onOpen();
+      board.app.metadataCache.getFileCache.mockReturnValue({
+        frontmatter: {
+          source_folder: "SaleTest",
+          stage_property: "sales_stage",
+          columns: ["New"],
+          card_fields: []
+        }
+      });
+
+      board.app.metadataCache.trigger("changed", new TFile("SaleTest/Board.md"), "", {});
+      await vi.advanceTimersByTimeAsync(100);
+
+      expect(labels(board.view, ".client-kanban-error")).toEqual([
+        "client_kanban must be true to use this note as a Client Kanban board"
+      ]);
+      expect(board.repository.list).toHaveBeenCalledTimes(1);
+      await board.view.onClose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("always refreshes when the board note changes outside the source folder", async () => {
     vi.useFakeTimers();
     try {
@@ -427,6 +524,36 @@ describe("ClientKanbanView", () => {
       board.app.vault.trigger("modify", new TFile("Boards/Sales.md"));
       await vi.advanceTimersByTimeAsync(100);
 
+      expect(board.repository.list).toHaveBeenCalledTimes(2);
+      await board.view.onClose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("adopts a renamed board path before refreshing and serializing state", async () => {
+    vi.useFakeTimers();
+    try {
+      const board = harness({ boardPath: "Boards/Sales.md" });
+      await board.view.onOpen();
+      const renamedBoard = Object.assign(new TFile("Boards/Renamed Sales.md"), {
+        frontmatter: {
+          client_kanban: true,
+          source_folder: "SaleTest",
+          stage_property: "sales_stage",
+          columns: ["New", "Contacted"],
+          card_fields: []
+        }
+      });
+      board.app.vault.getAbstractFileByPath.mockImplementation(
+        (path: string) => path === renamedBoard.path ? renamedBoard : null
+      );
+
+      board.app.vault.trigger("rename", renamedBoard, "Boards/Sales.md");
+      await vi.advanceTimersByTimeAsync(100);
+
+      expect(board.view.getState()).toEqual({ file: "Boards/Renamed Sales.md" });
+      expect(board.app.vault.getAbstractFileByPath).toHaveBeenLastCalledWith("Boards/Renamed Sales.md");
       expect(board.repository.list).toHaveBeenCalledTimes(2);
       await board.view.onClose();
     } finally {

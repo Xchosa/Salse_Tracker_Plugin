@@ -167,6 +167,21 @@ describe("ClientKanbanView", () => {
     expect(card(view).dataset.path).toBe("SaleTest/Max.md");
   });
 
+  it("renders the board beneath the scoped view root across reopen", async () => {
+    const { view } = harness();
+
+    await view.onOpen();
+
+    expect(view.contentEl.querySelector(".client-kanban-board")?.closest(".client-kanban-view"))
+      .toBe(view.contentEl);
+
+    await view.onClose();
+    await view.onOpen();
+
+    expect(view.contentEl.querySelector(".client-kanban-board")?.closest(".client-kanban-view"))
+      .toBe(view.contentEl);
+  });
+
   it("opens a client note when its card is activated", async () => {
     const { view, app } = harness({ records: [client("SaleTest/Max.md", {})] });
     const clientFile = new TFile("SaleTest/Max.md");

@@ -40,6 +40,7 @@ export class ClientKanbanView extends ItemView {
   ) {
     super(leaf);
     this.app = app;
+    this.contentEl.classList.add("client-kanban-view");
     this.repository = repositoryFactory(app);
     this.sortableFactory = sortableFactory;
     this.register(() => this.clearRefreshTimer());

@@ -275,4 +275,22 @@ describe("ClientKanbanView", () => {
     expect(board.view.contentEl.querySelector(".client-kanban-board")).toBeNull();
     expect(board.sortableFactory).not.toHaveBeenCalled();
   });
+
+  it("does not refresh after an in-flight move settles after closing", async () => {
+    const board = harness({ records: [client("SaleTest/Max.md", { sales_stage: "New" })] });
+    let resolveWrite!: () => void;
+    board.repository.setStage.mockImplementationOnce(
+      () => new Promise<void>((resolve) => { resolveWrite = resolve; })
+    );
+    await board.view.refresh();
+
+    const move = drop(board, "SaleTest/Max.md", "Contacted");
+    await board.view.onClose();
+    resolveWrite();
+    await move;
+
+    expect(board.repository.list).toHaveBeenCalledTimes(1);
+    expect(board.sortableFactory).toHaveBeenCalledTimes(3);
+    expect(board.sortableDestroy).toHaveBeenCalledTimes(3);
+  });
 });

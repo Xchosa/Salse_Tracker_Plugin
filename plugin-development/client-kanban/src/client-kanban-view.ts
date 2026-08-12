@@ -25,6 +25,7 @@ export class ClientKanbanView extends ItemView {
   private readonly sortableFactory: SortableFactory;
   private sortables: Sortable[] = [];
   private refreshToken = 0;
+  private closed = false;
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -59,15 +60,18 @@ export class ClientKanbanView extends ItemView {
   }
 
   override async onOpen(): Promise<void> {
+    this.closed = false;
     await this.refresh();
   }
 
   override async onClose(): Promise<void> {
+    this.closed = true;
     ++this.refreshToken;
     this.destroySortables();
   }
 
   async refresh(): Promise<void> {
+    if (this.closed) return;
     const token = ++this.refreshToken;
     try {
       const board = this.app.vault.getAbstractFileByPath(this.boardPath);

@@ -1,5 +1,5 @@
 import { ItemView, Notice, TFile } from "obsidian";
-import type { App, WorkspaceLeaf } from "obsidian";
+import type { App, EventRef, WorkspaceLeaf } from "obsidian";
 import Sortable from "sortablejs";
 import { buildBoard } from "./board-model";
 import { parseBoardConfig } from "./config";
@@ -10,6 +10,7 @@ export const CLIENT_KANBAN_VIEW_TYPE = "client-kanban-view";
 type Repository = Pick<ClientRepository, "list" | "setStage">;
 type RepositoryFactory = (app: App) => Repository;
 type SortableFactory = (element: HTMLElement, options: Sortable.Options) => Sortable;
+type EventSource = { offref(ref: EventRef): void };
 
 type ObsidianElement = HTMLElement & {
   createDiv(options?: { cls?: string; text?: string }): ObsidianElement;
@@ -26,6 +27,9 @@ export class ClientKanbanView extends ItemView {
   private sortables: Sortable[] = [];
   private refreshToken = 0;
   private closed = false;
+  private sourceFolder: string | undefined;
+  private refreshTimer: number | undefined;
+  private eventRefs: Array<{ source: EventSource; ref: EventRef }> = [];
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -38,6 +42,7 @@ export class ClientKanbanView extends ItemView {
     this.app = app;
     this.repository = repositoryFactory(app);
     this.sortableFactory = sortableFactory;
+    this.register(() => this.clearRefreshTimer());
   }
 
   override getViewType(): string {
@@ -61,13 +66,26 @@ export class ClientKanbanView extends ItemView {
 
   override async onOpen(): Promise<void> {
     this.closed = false;
+    this.registerRefreshEvents();
     await this.refresh();
   }
 
   override async onClose(): Promise<void> {
     this.closed = true;
     ++this.refreshToken;
+    this.clearRefreshTimer();
+    for (const { source, ref } of this.eventRefs) source.offref(ref);
+    this.eventRefs = [];
     this.destroySortables();
+  }
+
+  scheduleRefresh(changedPath?: string): void {
+    if (this.closed || (changedPath !== undefined && !this.isRelevant(changedPath))) return;
+    this.clearRefreshTimer();
+    this.refreshTimer = window.setTimeout(() => {
+      this.refreshTimer = undefined;
+      void this.refresh();
+    }, 75);
   }
 
   async refresh(): Promise<void> {
@@ -83,6 +101,7 @@ export class ClientKanbanView extends ItemView {
         return;
       }
 
+      this.sourceFolder = config.value.sourceFolder;
       const records = await this.repository.list(config.value);
       if (token === this.refreshToken) this.renderBoard(config.value.stageProperty, buildBoard(config.value, records));
     } catch (error) {
@@ -155,6 +174,36 @@ export class ClientKanbanView extends ItemView {
   private destroySortables(): void {
     for (const sortable of this.sortables) sortable.destroy();
     this.sortables = [];
+  }
+
+  private registerRefreshEvents(): void {
+    if (this.eventRefs.length > 0) return;
+    const vault = this.app.vault;
+    this.trackEvent(vault, vault.on("create", (file) => this.scheduleRefresh(file.path)));
+    this.trackEvent(vault, vault.on("modify", (file) => this.scheduleRefresh(file.path)));
+    this.trackEvent(vault, vault.on("delete", (file) => this.scheduleRefresh(file.path)));
+    this.trackEvent(vault, vault.on("rename", (file, oldPath) => {
+      if (this.isRelevant(file.path) || this.isRelevant(oldPath)) this.scheduleRefresh();
+    }));
+    const metadataCache = this.app.metadataCache;
+    this.trackEvent(metadataCache, metadataCache.on("changed", (file) => this.scheduleRefresh(file.path)));
+  }
+
+  private trackEvent(source: EventSource, ref: EventRef): void {
+    this.eventRefs.push({ source, ref });
+    this.registerEvent(ref);
+  }
+
+  private isRelevant(path: string): boolean {
+    return path === this.boardPath
+      || (this.sourceFolder !== undefined
+        && path.substring(0, path.lastIndexOf("/")) === this.sourceFolder);
+  }
+
+  private clearRefreshTimer(): void {
+    if (this.refreshTimer === undefined) return;
+    window.clearTimeout(this.refreshTimer);
+    this.refreshTimer = undefined;
   }
 
   private messageFor(error: unknown): string {

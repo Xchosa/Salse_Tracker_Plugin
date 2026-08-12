@@ -1,4 +1,24 @@
-export class Plugin {}
+export class Component {
+  register(_callback: () => unknown): void {}
+  registerEvent(_eventRef: unknown): void {}
+}
+
+export class Plugin extends Component {
+  app: unknown;
+  manifest: unknown;
+
+  constructor(app: unknown, manifest: unknown) {
+    super();
+    this.app = app;
+    this.manifest = manifest;
+  }
+
+  addCommand(_command: unknown): unknown {
+    return _command;
+  }
+
+  registerView(_type: string, _creator: (leaf: unknown) => unknown): void {}
+}
 
 export class PluginSettingTab {}
 
@@ -32,11 +52,12 @@ function appendElement(parent: HTMLElement, tag: string, options: CreateOptions)
   return element;
 }
 
-export class ItemView {
+export class ItemView extends Component {
   app: unknown;
   contentEl: HTMLElement;
 
   constructor(public leaf: unknown) {
+    super();
     this.contentEl = decorateElement(document.createElement("div"));
   }
 }

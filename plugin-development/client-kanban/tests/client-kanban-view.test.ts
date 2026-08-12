@@ -29,16 +29,36 @@ type Harness = {
   sortableFactory: ReturnType<typeof vi.fn>;
 };
 
+type EventCallback = (...args: unknown[]) => unknown;
+
+function eventBus() {
+  const listeners = new Map<string, Set<EventCallback>>();
+  return {
+    on: vi.fn((name: string, callback: EventCallback) => {
+      const callbacks = listeners.get(name) ?? new Set<EventCallback>();
+      callbacks.add(callback);
+      listeners.set(name, callbacks);
+      return { name, callback };
+    }),
+    offref: vi.fn((ref: { name: string; callback: EventCallback }) => {
+      listeners.get(ref.name)?.delete(ref.callback);
+    }),
+    trigger(name: string, ...args: unknown[]) {
+      for (const callback of listeners.get(name) ?? []) callback(...args);
+    }
+  };
+}
+
 function client(path: string, frontmatter: Record<string, unknown>): ClientRecord {
   return { path, basename: path.split("/").at(-1)?.replace(/\.md$/, "") ?? path, frontmatter };
 }
 
-function fakeApp(): {
-  vault: { getAbstractFileByPath: ReturnType<typeof vi.fn> };
-  metadataCache: { getFileCache: ReturnType<typeof vi.fn> };
+function fakeApp(boardPath = "SaleTest/Board.md"): {
+  vault: ReturnType<typeof eventBus> & { getAbstractFileByPath: ReturnType<typeof vi.fn> };
+  metadataCache: ReturnType<typeof eventBus> & { getFileCache: ReturnType<typeof vi.fn> };
   workspace: { getLeaf: ReturnType<typeof vi.fn> };
 } {
-  const board = Object.assign(new TFile("SaleTest/Board.md"), {
+  const board = Object.assign(new TFile(boardPath), {
     frontmatter: {
       client_kanban: true,
       source_folder: boardConfig.sourceFolder,
@@ -51,8 +71,11 @@ function fakeApp(): {
   const openFile = vi.fn();
   const leaf = { openFile };
   return {
-    vault: { getAbstractFileByPath: vi.fn((path: string) => files.get(path) ?? null) },
-    metadataCache: { getFileCache: vi.fn((file: TFile) => ({ frontmatter: (file as TFile & { frontmatter: Record<string, unknown> }).frontmatter })) },
+    vault: { ...eventBus(), getAbstractFileByPath: vi.fn((path: string) => files.get(path) ?? null) },
+    metadataCache: {
+      ...eventBus(),
+      getFileCache: vi.fn((file: TFile) => ({ frontmatter: (file as TFile & { frontmatter: Record<string, unknown> }).frontmatter }))
+    },
     workspace: { getLeaf: vi.fn(() => leaf) }
   };
 }
@@ -62,8 +85,9 @@ function harness(options: {
   setStageError?: Error;
   boardFrontmatter?: Record<string, unknown>;
   missingFolder?: boolean;
+  boardPath?: string;
 } = {}): Harness {
-  const app = fakeApp();
+  const app = fakeApp(options.boardPath);
   const repository: Repository = {
     list: vi.fn(async () => {
       if (options.missingFolder) throw new Error('Source folder "SaleTest" was not found');
@@ -85,7 +109,7 @@ function harness(options: {
   const view = new ClientKanbanView(
     {} as WorkspaceLeaf,
     app as unknown as App,
-    "SaleTest/Board.md",
+    options.boardPath ?? "SaleTest/Board.md",
     () => repository as never,
     sortableFactory
   );
@@ -292,5 +316,142 @@ describe("ClientKanbanView", () => {
     expect(board.repository.list).toHaveBeenCalledTimes(1);
     expect(board.sortableFactory).toHaveBeenCalledTimes(3);
     expect(board.sortableDestroy).toHaveBeenCalledTimes(3);
+  });
+
+  it.each([
+    ["SaleTest/New.md", true],
+    ["SaleTest/Max.md", true],
+    ["SaleTest/Archive/Old.md", false],
+    ["Other/Client.md", false]
+  ])("filters changed path %s", async (path, refreshes) => {
+    vi.useFakeTimers();
+    try {
+      const board = harness();
+      await board.view.onOpen();
+
+      board.app.vault.trigger("modify", new TFile(path));
+      await vi.advanceTimersByTimeAsync(100);
+
+      expect(board.repository.list).toHaveBeenCalledTimes(refreshes ? 2 : 1);
+      await board.view.onClose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("coalesces rapid relevant vault and metadata events", async () => {
+    vi.useFakeTimers();
+    try {
+      const board = harness();
+      await board.view.onOpen();
+
+      board.app.metadataCache.trigger("changed", new TFile("SaleTest/Max.md"), "", {});
+      board.app.vault.trigger("rename", new TFile("SaleTest/Max-New.md"), "SaleTest/Max.md");
+      board.app.vault.trigger("delete", new TFile("SaleTest/Max-New.md"));
+      await vi.advanceTimersByTimeAsync(100);
+
+      expect(board.repository.list).toHaveBeenCalledTimes(2);
+      await board.view.onClose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each([
+    ["Other/Max.md", "SaleTest/Max.md"],
+    ["SaleTest/Max.md", "Other/Max.md"]
+  ])("refreshes when rename crosses the source-folder boundary from %s to %s", async (oldPath, newPath) => {
+    vi.useFakeTimers();
+    try {
+      const board = harness();
+      await board.view.onOpen();
+
+      board.app.vault.trigger("rename", new TFile(newPath), oldPath);
+      await vi.advanceTimersByTimeAsync(100);
+
+      expect(board.repository.list).toHaveBeenCalledTimes(2);
+      await board.view.onClose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("refreshes for board metadata changes and adopts the changed source folder", async () => {
+    vi.useFakeTimers();
+    try {
+      const board = harness();
+      await board.view.onOpen();
+      board.app.metadataCache.getFileCache.mockReturnValue({
+        frontmatter: {
+          client_kanban: true,
+          source_folder: "Prospects",
+          stage_property: "sales_stage",
+          columns: ["New"],
+          card_fields: []
+        }
+      });
+
+      board.app.metadataCache.trigger("changed", new TFile("SaleTest/Board.md"), "", {});
+      await vi.advanceTimersByTimeAsync(100);
+      board.app.vault.trigger("create", new TFile("Prospects/New.md"));
+      await vi.advanceTimersByTimeAsync(100);
+
+      expect(board.repository.list).toHaveBeenCalledTimes(3);
+      await board.view.onClose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("always refreshes when the board note changes outside the source folder", async () => {
+    vi.useFakeTimers();
+    try {
+      const board = harness({ boardPath: "Boards/Sales.md" });
+      await board.view.onOpen();
+
+      board.app.vault.trigger("modify", new TFile("Boards/Sales.md"));
+      await vi.advanceTimersByTimeAsync(100);
+
+      expect(board.repository.list).toHaveBeenCalledTimes(2);
+      await board.view.onClose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("treats only direct children of a root-level source folder as relevant", async () => {
+    vi.useFakeTimers();
+    try {
+      const board = harness();
+      await board.view.onOpen();
+
+      board.app.vault.trigger("create", new TFile("SaleTest/New.md"));
+      board.app.vault.trigger("create", new TFile("SaleTest/Nested/New.md"));
+      await vi.advanceTimersByTimeAsync(100);
+
+      expect(board.repository.list).toHaveBeenCalledTimes(2);
+      await board.view.onClose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("unregisters refresh events and cancels a pending refresh when closed", async () => {
+    vi.useFakeTimers();
+    try {
+      const board = harness();
+      await board.view.onOpen();
+      board.app.vault.trigger("modify", new TFile("SaleTest/Max.md"));
+
+      await board.view.onClose();
+      board.app.metadataCache.trigger("changed", new TFile("SaleTest/Max.md"), "", {});
+      await vi.advanceTimersByTimeAsync(100);
+
+      expect(board.repository.list).toHaveBeenCalledTimes(1);
+      expect(board.app.vault.offref).toHaveBeenCalledTimes(4);
+      expect(board.app.metadataCache.offref).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -6,7 +6,7 @@
 
 **Architecture:** `ClientKanbanPlugin` owns persisted `lastBoardPath`, ribbon activation, and shared board opening. `ClientKanbanView` owns a source-edit toolbar action and emits board-path rename changes through an injected callback; existing metadata events refresh corrected configuration.
 
-**Tech Stack:** TypeScript, Obsidian Plugin API, Vitest/jsdom, esbuild, npm.
+**Tech Stack:** TypeScript, Obsidian Plugin API, Vitest/jsdom, esbuild, pnpm.
 
 ## Global Constraints
 
@@ -22,6 +22,7 @@
 - Board rename updates persisted state only when the renamed path is the remembered last board.
 - Do not modify board or client YAML automatically.
 - Preserve mobile compatibility and introduce no Node/Electron runtime imports.
+- Use pnpm exclusively: replace `package-lock.json` with `pnpm-lock.yaml`, set `packageManager` in `package.json`, and run package scripts through `pnpm`.
 
 ---
 
@@ -31,6 +32,9 @@
 - Modify: `plugin-development/client-kanban/src/main.ts`
 - Modify: `plugin-development/client-kanban/tests/main.test.ts`
 - Modify: `plugin-development/client-kanban/tests/obsidian.ts`
+- Modify: `plugin-development/client-kanban/package.json`
+- Create: `plugin-development/client-kanban/pnpm-lock.yaml`
+- Delete: `plugin-development/client-kanban/package-lock.json`
 
 **Interfaces:**
 - Produces: `ClientKanbanPluginData { lastBoardPath?: string }`, plugin method behavior for loading/saving and ribbon reopening, and a view-factory rename callback consumed by Task 2.
@@ -64,7 +68,7 @@ Also test missing/malformed load data, no stored path, unavailable stored path, 
 
 - [ ] **Step 2: Run focused tests to verify RED**
 
-Run: `cd plugin-development/client-kanban && npm test -- tests/main.test.ts`
+Run: `cd plugin-development/client-kanban && pnpm test -- tests/main.test.ts`
 
 Expected: FAIL because persistence and ribbon APIs are not implemented.
 
@@ -83,14 +87,14 @@ Pass an async rename callback from the registered view factory. It persists `new
 
 - [ ] **Step 4: Run Task 1 verification**
 
-Run: `cd plugin-development/client-kanban && npm test -- tests/main.test.ts && npm test && npm run build`
+Run: `cd plugin-development/client-kanban && pnpm test -- tests/main.test.ts && pnpm test && pnpm build`
 
 Expected: all tests PASS and the build succeeds.
 
 - [ ] **Step 5: Commit Task 1**
 
 ```bash
-git add plugin-development/client-kanban/src/main.ts plugin-development/client-kanban/tests/main.test.ts plugin-development/client-kanban/tests/obsidian.ts
+git add plugin-development/client-kanban/src/main.ts plugin-development/client-kanban/tests/main.test.ts plugin-development/client-kanban/tests/obsidian.ts plugin-development/client-kanban/package.json plugin-development/client-kanban/pnpm-lock.yaml plugin-development/client-kanban/package-lock.json
 git commit -m "feat: reopen last client kanban board"
 ```
 
@@ -136,7 +140,7 @@ Assert the pencil button has `aria-label` and `title` equal to `Edit board confi
 
 - [ ] **Step 2: Run focused tests to verify RED**
 
-Run: `cd plugin-development/client-kanban && npm test -- tests/client-kanban-view.test.ts`
+Run: `cd plugin-development/client-kanban && pnpm test -- tests/client-kanban-view.test.ts`
 
 Expected: FAIL because the toolbar, edit navigation, and callback do not exist.
 
@@ -156,8 +160,8 @@ Run:
 
 ```bash
 cd plugin-development/client-kanban
-npm test
-npm run build
+pnpm test
+pnpm build
 ./tools/deploy.sh
 cmp main.js ../../.obsidian/plugins/client-kanban/main.js
 cmp manifest.json ../../.obsidian/plugins/client-kanban/manifest.json

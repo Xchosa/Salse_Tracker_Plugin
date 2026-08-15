@@ -10,6 +10,7 @@ interface ClientKanbanPluginData {
 
 export default class ClientKanbanPlugin extends Plugin {
   private data: ClientKanbanPluginData = {};
+  private saveQueue: Promise<void> = Promise.resolve();
 
   override async onload(): Promise<void> {
     await this.loadPluginData();
@@ -34,7 +35,7 @@ export default class ClientKanbanPlugin extends Plugin {
       }
 
       const file = this.app.vault.getAbstractFileByPath(path);
-      if (!(file instanceof TFile)) {
+      if (!(file instanceof TFile) || file.extension !== "md") {
         new Notice(`The last Client Kanban board is unavailable: ${path}`);
         return;
       }
@@ -60,7 +61,8 @@ export default class ClientKanbanPlugin extends Plugin {
   }
 
   private isBoard(file: TFile): boolean {
-    return this.app.metadataCache.getFileCache(file)?.frontmatter?.client_kanban === true;
+    return file.extension === "md"
+      && this.app.metadataCache.getFileCache(file)?.frontmatter?.client_kanban === true;
   }
 
   private async openBoard(file: TFile, leaf: WorkspaceLeaf = this.app.workspace.getLeaf(false)): Promise<void> {
@@ -100,9 +102,16 @@ export default class ClientKanbanPlugin extends Plugin {
     await this.savePluginData();
   }
 
-  private async savePluginData(): Promise<void> {
+  private savePluginData(): Promise<void> {
+    const snapshot = { ...this.data };
+    const queuedSave = this.saveQueue.then(() => this.writePluginData(snapshot));
+    this.saveQueue = queuedSave.catch(() => undefined);
+    return queuedSave;
+  }
+
+  private async writePluginData(snapshot: ClientKanbanPluginData): Promise<void> {
     try {
-      await this.saveData(this.data);
+      await this.saveData(snapshot);
     } catch (error) {
       console.error("Unable to save Client Kanban plugin data", error);
       new Notice("Could not save the last Client Kanban board.");

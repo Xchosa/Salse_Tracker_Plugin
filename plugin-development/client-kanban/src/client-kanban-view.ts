@@ -100,7 +100,9 @@ export class ClientKanbanView extends ItemView {
     let boardResolved = false;
     try {
       const board = this.app.vault.getAbstractFileByPath(this.boardPath);
-      if (!(board instanceof TFile)) throw new Error(`Board note "${this.boardPath}" is unavailable`);
+      if (!(board instanceof TFile) || board.extension !== "md") {
+        throw new Error(`Board note "${this.boardPath}" is unavailable`);
+      }
       boardResolved = true;
 
       const config = parseBoardConfig(this.app.metadataCache.getFileCache(board)?.frontmatter);
@@ -186,7 +188,7 @@ export class ClientKanbanView extends ItemView {
 
   private async openBoardConfiguration(): Promise<void> {
     const board = this.app.vault.getAbstractFileByPath(this.boardPath);
-    if (!(board instanceof TFile)) {
+    if (!(board instanceof TFile) || board.extension !== "md") {
       new Notice(`Board note "${this.boardPath}" is unavailable`);
       return;
     }

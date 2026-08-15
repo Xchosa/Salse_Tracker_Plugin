@@ -258,6 +258,17 @@ describe("ClientKanbanView", () => {
     expect(app.workspace.getLeaf).not.toHaveBeenCalled();
   });
 
+  it("refuses to edit a board path that re-resolves to a non-Markdown file", async () => {
+    const { view, app } = harness();
+    await view.refresh();
+    app.vault.getAbstractFileByPath.mockReturnValue(new TFile("SaleTest/Board.canvas"));
+
+    editButton(view).click();
+
+    expect(recordedNotices()).toContain('Board note "SaleTest/Board.md" is unavailable');
+    expect(app.workspace.getLeaf).not.toHaveBeenCalled();
+  });
+
   it("does not render an edit toolbar when the board file is unavailable", async () => {
     const { view, app } = harness();
     app.vault.getAbstractFileByPath.mockReturnValue(null);
@@ -267,6 +278,17 @@ describe("ClientKanbanView", () => {
     expect(view.contentEl.querySelector(".client-kanban-toolbar")).toBeNull();
     expect(labels(view, ".client-kanban-error")).toEqual([
       'Board note "SaleTest/Board.md" is unavailable'
+    ]);
+  });
+
+  it("does not render an edit toolbar when the board path resolves to a non-Markdown file", async () => {
+    const { view } = harness({ boardPath: "SaleTest/Board.canvas" });
+
+    await view.refresh();
+
+    expect(view.contentEl.querySelector(".client-kanban-toolbar")).toBeNull();
+    expect(labels(view, ".client-kanban-error")).toEqual([
+      'Board note "SaleTest/Board.canvas" is unavailable'
     ]);
   });
 

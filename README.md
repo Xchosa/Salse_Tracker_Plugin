@@ -96,7 +96,7 @@ Use `pnpm dev` for an unminified development bundle. The [plugin technical READM
 
 The current plugin does not ship AI automation. Its Markdown-native records make future AI-assisted workflows practical because an AI system could read the same structured facts and narrative history as the team.
 
-That outlook includes relationship summaries before calls, meeting preparation from past contacts and open questions, follow-up or stale-relationship detection, next-action extraction from notes, cross-vault history comparison, and suggested property updates. These are future possibilities, not shipped behavior; people remain in control of every change to their client files.
+That outlook includes relationship summaries before calls, meeting preparation from past contacts and open questions, follow-up or stale-relationship detection, next-action extraction from notes, vault-wide history comparison, and suggested property updates. These are future possibilities, not shipped behavior; people remain in control of every change to their client files.
 
 ## Contributing and project status
 

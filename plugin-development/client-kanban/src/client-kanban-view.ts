@@ -1,4 +1,4 @@
-import { ItemView, Notice, TFile } from "obsidian";
+import { ItemView, Notice, setIcon, TFile } from "obsidian";
 import type { App, EventRef, WorkspaceLeaf } from "obsidian";
 import Sortable from "sortablejs";
 import { buildBoard } from "./board-model";
@@ -13,6 +13,7 @@ type Repository = Pick<ClientRepository, "list" | "setStage">;
 type RepositoryFactory = (app: App) => Repository;
 type SortableFactory = (element: HTMLElement, options: Sortable.Options) => Sortable;
 type EventSource = { offref(ref: EventRef): void };
+export type BoardPathChanged = (oldPath: string, newPath: string) => void | Promise<void>;
 
 type ObsidianElement = HTMLElement & {
   createDiv(options?: { cls?: string; text?: string }): ObsidianElement;
@@ -39,7 +40,8 @@ export class ClientKanbanView extends ItemView {
     app: App,
     private boardPath: string,
     repositoryFactory: RepositoryFactory = (targetApp) => new ClientRepository(targetApp),
-    sortableFactory: SortableFactory = (element, options) => new Sortable(element, options)
+    sortableFactory: SortableFactory = (element, options) => new Sortable(element, options),
+    private readonly boardPathChanged?: BoardPathChanged
   ) {
     super(leaf);
     this.app = app;
@@ -95,13 +97,17 @@ export class ClientKanbanView extends ItemView {
   async refresh(): Promise<void> {
     if (this.closed) return;
     const token = ++this.refreshToken;
+    let boardResolved = false;
     try {
       const board = this.app.vault.getAbstractFileByPath(this.boardPath);
-      if (!(board instanceof TFile)) throw new Error(`Board note "${this.boardPath}" is unavailable`);
+      if (!(board instanceof TFile) || board.extension !== "md") {
+        throw new Error(`Board note "${this.boardPath}" is unavailable`);
+      }
+      boardResolved = true;
 
       const config = parseBoardConfig(this.app.metadataCache.getFileCache(board)?.frontmatter);
       if (!config.ok) {
-        if (token === this.refreshToken) this.renderErrors(config.errors);
+        if (token === this.refreshToken) this.renderErrors(config.errors, true);
         return;
       }
 
@@ -109,14 +115,15 @@ export class ClientKanbanView extends ItemView {
       const records = await this.repository.list(config.value);
       if (token === this.refreshToken) this.renderBoard(config.value.stageProperty, buildBoard(config.value, records));
     } catch (error) {
-      if (token === this.refreshToken) this.renderErrors([this.messageFor(error)]);
+      if (token === this.refreshToken) this.renderErrors([this.messageFor(error)], boardResolved);
     }
   }
 
-  private renderErrors(errors: string[]): void {
+  private renderErrors(errors: string[], showToolbar = false): void {
     const content = this.contentEl as ObsidianElement;
     this.destroySortables();
     content.empty();
+    if (showToolbar) this.renderToolbar(content);
     for (const error of errors) content.createDiv({ cls: "client-kanban-error", text: error });
   }
 
@@ -124,6 +131,7 @@ export class ClientKanbanView extends ItemView {
     const content = this.contentEl as ObsidianElement;
     this.destroySortables();
     content.empty();
+    this.renderToolbar(content);
     const board = content.createDiv({ cls: "client-kanban-board" });
 
     for (const column of columns) {
@@ -168,6 +176,25 @@ export class ClientKanbanView extends ItemView {
     }
   }
 
+  private renderToolbar(content: ObsidianElement): void {
+    const toolbar = content.createDiv({ cls: "client-kanban-toolbar" });
+    const edit = toolbar.createEl("button", { cls: "client-kanban-edit-board" });
+    edit.type = "button";
+    edit.title = "Edit board configuration";
+    edit.setAttribute("aria-label", "Edit board configuration");
+    setIcon(edit, "pencil");
+    edit.addEventListener("click", () => { void this.openBoardConfiguration(); });
+  }
+
+  private async openBoardConfiguration(): Promise<void> {
+    const board = this.app.vault.getAbstractFileByPath(this.boardPath);
+    if (!(board instanceof TFile) || board.extension !== "md") {
+      new Notice(`Board note "${this.boardPath}" is unavailable`);
+      return;
+    }
+    await this.app.workspace.getLeaf("tab").openFile(board);
+  }
+
   private async openClient(path: string): Promise<void> {
     const file = this.app.vault.getAbstractFileByPath(path);
     if (file instanceof TFile) await this.app.workspace.getLeaf(false).openFile(file);
@@ -195,8 +222,12 @@ export class ClientKanbanView extends ItemView {
     this.trackEvent(vault, vault.on("modify", (file) => this.scheduleRefresh(file.path)));
     this.trackEvent(vault, vault.on("delete", (file) => this.scheduleRefresh(file.path)));
     this.trackEvent(vault, vault.on("rename", (file, oldPath) => {
-      const boardRenamed = oldPath === this.boardPath;
-      if (boardRenamed) this.boardPath = file.path;
+      const oldBoardPath = this.boardPath;
+      const boardRenamed = oldPath === oldBoardPath;
+      if (boardRenamed) {
+        this.boardPath = file.path;
+        void this.reportBoardPathChanged(oldBoardPath, file.path);
+      }
       if (boardRenamed || this.isRelevant(file.path) || this.isRelevant(oldPath)) this.scheduleRefresh();
     }));
     const metadataCache = this.app.metadataCache;
@@ -206,6 +237,14 @@ export class ClientKanbanView extends ItemView {
   private trackEvent(source: EventSource, ref: EventRef): void {
     this.eventRefs.push({ source, ref });
     this.registerEvent(ref);
+  }
+
+  private async reportBoardPathChanged(oldPath: string, newPath: string): Promise<void> {
+    try {
+      await this.boardPathChanged?.(oldPath, newPath);
+    } catch (error) {
+      new Notice(`Could not update the renamed Client Kanban board: ${this.messageFor(error)}`);
+    }
   }
 
   private isRelevant(path: string): boolean {

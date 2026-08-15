@@ -1,3 +1,28 @@
+.client-kanban-view .client-kanban-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--size-4-2);
+  padding: var(--size-4-2) var(--size-4-4) 0;
+}
+
+.client-kanban-view .client-kanban-edit-board {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--clickable-icon-size);
+  height: var(--clickable-icon-size);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-s);
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.client-kanban-view .client-kanban-edit-board:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
 .client-kanban-view .client-kanban-board {
   display: flex;
   gap: var(--size-4-4);

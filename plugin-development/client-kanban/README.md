@@ -20,7 +20,7 @@ Use `pnpm dev` while developing to produce an unminified bundle. Run `./tools/de
 
 ## Using a board
 
-Build and deploy the plugin, then enable **Client Kanban** in Obsidian under **Settings → Community plugins**. Create a board note with `client_kanban: true`, then use the note's context menu command **Open as Client Kanban** (or the command palette action **Open current note as Client Kanban**).
+Build and deploy the plugin, then enable **Client Kanban** in Obsidian under **Settings → Community plugins**. Create a board note with `client_kanban: true`, then use the note's context menu command **Open as Client Kanban** (or the command palette action **Open current note as Client Kanban**). The left-ribbon **Open last Client Kanban** action reopens the last board that opened successfully, including after Obsidian restarts. Missing or invalid boards do not replace that remembered board.
 
 ```yaml
 ---
@@ -55,6 +55,8 @@ next_appointment: 2026-08-20
 Detailed notes and contact history remain in the Markdown body.
 ```
 
+Use the pencil action labeled **Edit board configuration** to open the current board's Markdown source in a separate tab without closing the Kanban view. The pencil remains available when configuration values are malformed, so you can correct the YAML and save it; the open Kanban view refreshes from the updated metadata. Renaming the board while its Kanban view is open updates the remembered path.
+
 ## Manual smoke checklist
 
 After building and deploying the plugin, verify the following in Obsidian:
@@ -66,5 +68,8 @@ After building and deploying the plugin, verify the following in Obsidian:
 5. Open two Client Kanban boards side by side and confirm a card cannot be dragged from one board into the other.
 6. Give a client an unknown stage, release its Uncategorized card within that same list, and confirm the unknown YAML value and repository-defined card order remain unchanged.
 7. Remove `client_kanban: true` while its board view is open and confirm the view replaces the board with an actionable configuration error.
-8. Rename the board note while its view is open and confirm the view refreshes and survives a workspace reload at the renamed path.
-9. Create, edit, rename, and delete a direct client note and confirm the board refreshes; repeat with an unrelated or nested note and confirm it does not.
+8. Click the pencil action and confirm the board Markdown opens in a separate tab while the Kanban view remains open.
+9. Make `card_fields` malformed, open it with the pencil action, correct and save the YAML, and confirm the Kanban view refreshes.
+10. Close the board tab, use the left-ribbon action to reopen it, restart Obsidian, and confirm the same remembered board still reopens.
+11. Rename the board note while its view is open, restart Obsidian, and confirm the ribbon reopens the renamed path.
+12. Create, edit, rename, and delete a direct client note and confirm the board refreshes; repeat with an unrelated or nested note and confirm it does not.

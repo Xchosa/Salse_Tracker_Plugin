@@ -134,6 +134,12 @@ function text(view: ClientKanbanView, selector: string): string {
   return element.textContent ?? "";
 }
 
+function editButton(view: ClientKanbanView): HTMLButtonElement {
+  const button = view.contentEl.querySelector<HTMLButtonElement>(".client-kanban-edit-board");
+  if (!button) throw new Error("edit button not found");
+  return button;
+}
+
 function openFileSpy(app: ReturnType<typeof fakeApp>): ReturnType<typeof vi.fn> {
   return app.workspace.getLeaf.mock.results[0]?.value.openFile;
 }
@@ -217,6 +223,53 @@ describe("ClientKanbanView", () => {
     expect(openFileSpy(app)).toHaveBeenCalledWith(expect.objectContaining({ path: "SaleTest/Max.md" }));
   });
 
+  it("renders an accessible pencil action for a valid board", async () => {
+    const { view } = harness();
+
+    await view.refresh();
+
+    const button = editButton(view);
+    expect(button.type).toBe("button");
+    expect(button.title).toBe("Edit board configuration");
+    expect(button.getAttribute("aria-label")).toBe("Edit board configuration");
+    expect(button.dataset.icon).toBe("pencil");
+    expect(button.closest(".client-kanban-toolbar")).not.toBeNull();
+  });
+
+  it("opens malformed board configuration in a separate tab", async () => {
+    const { view, app } = harness({ boardFrontmatter: { client_kanban: true, columns: [] } });
+
+    await view.refresh();
+    editButton(view).click();
+
+    expect(view.contentEl.querySelector(".client-kanban-error")).not.toBeNull();
+    expect(app.workspace.getLeaf).toHaveBeenCalledWith("tab");
+    expect(openFileSpy(app)).toHaveBeenCalledWith(expect.objectContaining({ path: "SaleTest/Board.md" }));
+  });
+
+  it("re-resolves the board before editing and reports when it became unavailable", async () => {
+    const { view, app } = harness();
+    await view.refresh();
+    app.vault.getAbstractFileByPath.mockReturnValue(null);
+
+    editButton(view).click();
+
+    expect(recordedNotices()).toContain('Board note "SaleTest/Board.md" is unavailable');
+    expect(app.workspace.getLeaf).not.toHaveBeenCalled();
+  });
+
+  it("does not render an edit toolbar when the board file is unavailable", async () => {
+    const { view, app } = harness();
+    app.vault.getAbstractFileByPath.mockReturnValue(null);
+
+    await view.refresh();
+
+    expect(view.contentEl.querySelector(".client-kanban-toolbar")).toBeNull();
+    expect(labels(view, ".client-kanban-error")).toEqual([
+      'Board note "SaleTest/Board.md" is unavailable'
+    ]);
+  });
+
   it("serializes and restores the board file path", async () => {
     const { view, app } = harness();
     const replacementBoard = Object.assign(new TFile("SaleTest/Replacement.md"), {
@@ -244,6 +297,40 @@ describe("ClientKanbanView", () => {
     app.vault.trigger("rename", new TFile("SaleTest/Renamed.md"), "SaleTest/Board.md");
 
     expect(changed).toHaveBeenCalledWith("SaleTest/Board.md", "SaleTest/Renamed.md");
+  });
+
+  it("notifies when a rename callback fails without preventing refresh", async () => {
+    vi.useFakeTimers();
+    try {
+      const renamedBoard = Object.assign(new TFile("SaleTest/Renamed.md"), {
+        frontmatter: {
+          client_kanban: true,
+          source_folder: "SaleTest",
+          stage_property: "sales_stage",
+          columns: ["New", "Contacted"],
+          card_fields: []
+        }
+      });
+      const board = harness({
+        boardPathChanged: vi.fn(async () => { throw new Error("save failed"); })
+      });
+      await board.view.onOpen();
+      board.app.vault.getAbstractFileByPath.mockImplementation(
+        (path: string) => path === renamedBoard.path ? renamedBoard : null
+      );
+
+      board.app.vault.trigger("rename", renamedBoard, "SaleTest/Board.md");
+      await vi.advanceTimersByTimeAsync(100);
+
+      expect(recordedNotices()).toContain(
+        "Could not update the renamed Client Kanban board: save failed"
+      );
+      expect(board.repository.list).toHaveBeenCalledTimes(2);
+      expect(board.view.getState()).toEqual({ file: "SaleTest/Renamed.md" });
+      await board.view.onClose();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("renders configuration and repository errors", async () => {

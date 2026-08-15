@@ -86,6 +86,7 @@ function harness(options: {
   boardFrontmatter?: Record<string, unknown>;
   missingFolder?: boolean;
   boardPath?: string;
+  boardPathChanged?: (oldPath: string, newPath: string) => void | Promise<void>;
 } = {}): Harness {
   const app = fakeApp(options.boardPath);
   const repository: Repository = {
@@ -111,7 +112,8 @@ function harness(options: {
     app as unknown as App,
     options.boardPath ?? "SaleTest/Board.md",
     () => repository as never,
-    sortableFactory
+    sortableFactory,
+    options.boardPathChanged
   );
   return { view, app, repository, dropHandlers, sortableDestroy, sortableFactory };
 }
@@ -232,6 +234,16 @@ describe("ClientKanbanView", () => {
 
     expect(view.getState()).toEqual({ file: "SaleTest/Replacement.md" });
     expect(app.vault.getAbstractFileByPath).toHaveBeenCalledWith("SaleTest/Replacement.md");
+  });
+
+  it("reports the renamed board path through the supplied callback", async () => {
+    const changed = vi.fn();
+    const { view, app } = harness({ boardPathChanged: changed });
+    await view.onOpen();
+
+    app.vault.trigger("rename", new TFile("SaleTest/Renamed.md"), "SaleTest/Board.md");
+
+    expect(changed).toHaveBeenCalledWith("SaleTest/Board.md", "SaleTest/Renamed.md");
   });
 
   it("renders configuration and repository errors", async () => {

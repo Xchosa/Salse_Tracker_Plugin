@@ -9,14 +9,27 @@ function file(path: string, frontmatter: Record<string, unknown>): TestFile {
   return Object.assign(new TFile(path), { frontmatter });
 }
 
-function pluginHarness(options: { activeFile?: TestFile | null } = {}) {
-  const leaf = { setViewState: vi.fn(async () => undefined) };
+function pluginHarness(options: {
+  activeFile?: TestFile | null;
+  files?: TestFile[];
+  storedData?: unknown;
+  loadDataError?: Error;
+  saveDataError?: Error;
+  setViewStateError?: Error;
+} = {}) {
+  const leaf = {
+    setViewState: vi.fn(async () => {
+      if (options.setViewStateError) throw options.setViewStateError;
+    })
+  };
   const workspaceEvents = new Map<string, (...args: unknown[]) => unknown>();
   const app = {
     metadataCache: {
       getFileCache: vi.fn((target: TestFile) => ({ frontmatter: target.frontmatter }))
     },
-    vault: {},
+    vault: {
+      getAbstractFileByPath: vi.fn((path: string) => options.files?.find((target) => target.path === path) ?? null)
+    },
     workspace: {
       getActiveFile: vi.fn(() => options.activeFile ?? null),
       getLeaf: vi.fn(() => leaf),
@@ -37,7 +50,21 @@ function pluginHarness(options: { activeFile?: TestFile | null } = {}) {
     views.set(type, creator);
   });
   plugin.registerEvent = vi.fn();
-  return { app, commands, leaf, plugin, views, workspaceEvents };
+  plugin.loadData = vi.fn(async () => {
+    if (options.loadDataError) throw options.loadDataError;
+    return options.storedData;
+  });
+  plugin.saveData = vi.fn(async () => {
+    if (options.saveDataError) throw options.saveDataError;
+  });
+  const ribbon = { icon: "", title: "", callback: async () => undefined as unknown };
+  plugin.addRibbonIcon = vi.fn((icon, title, callback) => {
+    ribbon.icon = icon;
+    ribbon.title = title;
+    ribbon.callback = callback;
+    return {} as HTMLElement;
+  });
+  return { app, commands, leaf, plugin, ribbon, views, workspaceEvents };
 }
 
 async function runCommand(harness: ReturnType<typeof pluginHarness>, id: string): Promise<void> {
@@ -116,5 +143,104 @@ describe("ClientKanbanPlugin", () => {
     expect(harness.plugin.registerEvent).toHaveBeenCalledWith(
       expect.objectContaining({ name: "file-menu", callback: expect.any(Function) })
     );
+  });
+
+  it("reopens the persisted last board from the ribbon", async () => {
+    const board = file("SaleTest/Board.md", { client_kanban: true });
+    const harness = pluginHarness({ files: [board], storedData: { lastBoardPath: board.path } });
+
+    await harness.plugin.onload();
+    await harness.ribbon.callback();
+
+    expect(harness.ribbon).toMatchObject({ icon: "columns-3", title: "Open last Client Kanban" });
+    expect(harness.leaf.setViewState).toHaveBeenCalledWith({
+      type: CLIENT_KANBAN_VIEW_TYPE,
+      active: true,
+      state: { file: board.path }
+    });
+  });
+
+  it("persists a board path only after successful activation", async () => {
+    const board = file("SaleTest/Board.md", { client_kanban: true });
+    const harness = pluginHarness({ activeFile: board });
+
+    await harness.plugin.onload();
+    await runCommand(harness, "client-kanban-open-current-board");
+
+    expect(harness.plugin.saveData).toHaveBeenCalledWith({ lastBoardPath: board.path });
+  });
+
+  it("treats missing or malformed persisted data as no remembered board", async () => {
+    for (const storedData of [undefined, null, "SaleTest/Board.md", {}, { lastBoardPath: "" }, { lastBoardPath: 42 }]) {
+      const harness = pluginHarness({ storedData });
+
+      await harness.plugin.onload();
+      await harness.ribbon.callback();
+
+      expect(recordedNotices()).toContain("Open a note marked client_kanban: true first.");
+      clearNotices();
+    }
+  });
+
+  it("continues startup with no remembered board when loading data fails", async () => {
+    const logError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const harness = pluginHarness({ loadDataError: new Error("disk unavailable") });
+
+    await harness.plugin.onload();
+    await harness.ribbon.callback();
+
+    expect(recordedNotices()).toContain("Open a note marked client_kanban: true first.");
+    expect(logError).toHaveBeenCalled();
+    logError.mockRestore();
+  });
+
+  it("reports an unavailable remembered board without clearing it", async () => {
+    const harness = pluginHarness({ storedData: { lastBoardPath: "SaleTest/Missing.md" } });
+
+    await harness.plugin.onload();
+    await harness.ribbon.callback();
+
+    expect(recordedNotices()).toContain("The last Client Kanban board is unavailable: SaleTest/Missing.md");
+    expect(harness.plugin.saveData).not.toHaveBeenCalled();
+  });
+
+  it("does not reopen a remembered note after it is no longer marked as a board", async () => {
+    const board = file("SaleTest/Board.md", { client_kanban: false });
+    const harness = pluginHarness({ files: [board], storedData: { lastBoardPath: board.path } });
+
+    await harness.plugin.onload();
+    await harness.ribbon.callback();
+
+    expect(recordedNotices()).toContain("The current note is not marked client_kanban: true");
+    expect(harness.plugin.saveData).not.toHaveBeenCalled();
+  });
+
+  it("does not persist a board whose view activation fails", async () => {
+    const board = file("SaleTest/Board.md", { client_kanban: true });
+    const harness = pluginHarness({ activeFile: board, setViewStateError: new Error("leaf closed") });
+
+    await harness.plugin.onload();
+    await expect(runCommand(harness, "client-kanban-open-current-board")).rejects.toThrow("leaf closed");
+
+    expect(harness.plugin.saveData).not.toHaveBeenCalled();
+  });
+
+  it("keeps the remembered path in memory and notifies when saving it fails", async () => {
+    const board = file("SaleTest/Board.md", { client_kanban: true });
+    const logError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const harness = pluginHarness({
+      activeFile: board,
+      files: [board],
+      saveDataError: new Error("disk unavailable")
+    });
+
+    await harness.plugin.onload();
+    await runCommand(harness, "client-kanban-open-current-board");
+    await harness.ribbon.callback();
+
+    expect(recordedNotices()).toContain("Could not save the last Client Kanban board.");
+    expect(harness.leaf.setViewState).toHaveBeenCalledTimes(2);
+    expect(logError).toHaveBeenCalledTimes(2);
+    logError.mockRestore();
   });
 });

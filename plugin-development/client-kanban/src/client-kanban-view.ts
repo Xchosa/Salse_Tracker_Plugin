@@ -13,6 +13,7 @@ type Repository = Pick<ClientRepository, "list" | "setStage">;
 type RepositoryFactory = (app: App) => Repository;
 type SortableFactory = (element: HTMLElement, options: Sortable.Options) => Sortable;
 type EventSource = { offref(ref: EventRef): void };
+export type BoardPathChanged = (oldPath: string, newPath: string) => void | Promise<void>;
 
 type ObsidianElement = HTMLElement & {
   createDiv(options?: { cls?: string; text?: string }): ObsidianElement;
@@ -39,7 +40,8 @@ export class ClientKanbanView extends ItemView {
     app: App,
     private boardPath: string,
     repositoryFactory: RepositoryFactory = (targetApp) => new ClientRepository(targetApp),
-    sortableFactory: SortableFactory = (element, options) => new Sortable(element, options)
+    sortableFactory: SortableFactory = (element, options) => new Sortable(element, options),
+    private readonly boardPathChanged?: BoardPathChanged
   ) {
     super(leaf);
     this.app = app;
@@ -197,6 +199,7 @@ export class ClientKanbanView extends ItemView {
     this.trackEvent(vault, vault.on("rename", (file, oldPath) => {
       const boardRenamed = oldPath === this.boardPath;
       if (boardRenamed) this.boardPath = file.path;
+      if (boardRenamed) void this.boardPathChanged?.(oldPath, file.path);
       if (boardRenamed || this.isRelevant(file.path) || this.isRelevant(oldPath)) this.scheduleRefresh();
     }));
     const metadataCache = this.app.metadataCache;

@@ -7,12 +7,12 @@ Client Kanban is an Obsidian community plugin that renders Markdown notes as con
 Install dependencies and run the checks from this directory:
 
 ```sh
-npm install
-npm test
-npm run build
+pnpm install
+pnpm test
+pnpm build
 ```
 
-Use `npm run dev` while developing to produce an unminified bundle. Run `./tools/deploy.sh` after a build to copy `main.js`, `manifest.json`, and `styles.css` to this vault's `.obsidian/plugins/client-kanban` directory. To deploy elsewhere, pass the target directory as its only argument:
+Use `pnpm dev` while developing to produce an unminified bundle. Run `./tools/deploy.sh` after a build to copy `main.js`, `manifest.json`, and `styles.css` to this vault's `.obsidian/plugins/client-kanban` directory. To deploy elsewhere, pass the target directory as its only argument:
 
 ```sh
 ./tools/deploy.sh /path/to/vault/.obsidian/plugins/client-kanban

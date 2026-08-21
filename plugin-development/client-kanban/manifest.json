@@ -1,11 +1,11 @@
 {
   "id": "client-kanban",
   "name": "Client Kanban",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "minAppVersion": "1.5.3",
-  "description": "A kanban view for client notes.",
-  "author": "",
-  "authorUrl": "",
+  "description": "Turn folders of Markdown notes into configurable Kanban boards backed by YAML properties.",
+  "author": "Paul Overbeck",
+  "authorUrl": "https://github.com/Xchosa",
   "fundingUrl": "",
   "isDesktopOnly": false
 }

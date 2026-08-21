@@ -17,21 +17,12 @@ For beta testing before directory approval, download `main.js`, `manifest.json`,
 Install dependencies and run the checks from this directory:
 
 ```sh
-<<<<<<< HEAD
-pnpm install
-pnpm test
-pnpm build
-```
-
-Use `pnpm dev` while developing to produce an unminified bundle. Run `./tools/deploy.sh` after a build to copy `main.js`, `manifest.json`, and `styles.css` to this vault's `.obsidian/plugins/client-kanban` directory. To deploy elsewhere, pass the target directory as its only argument:
-=======
 corepack pnpm install
 corepack pnpm test
 corepack pnpm build
 ```
 
 Use `corepack pnpm dev` while developing to produce an unminified bundle. Run `./tools/deploy.sh` after a build to copy `main.js`, `manifest.json`, and `styles.css` to this vault's `.obsidian/plugins/client-kanban` directory. To deploy elsewhere, pass the target directory as its only argument:
->>>>>>> 927a330 (git hub actions + License + clean up)
 
 ```sh
 ./tools/deploy.sh /path/to/vault/.obsidian/plugins/client-kanban
@@ -89,15 +80,11 @@ After building and deploying the plugin, verify the following in Obsidian:
 5. Open two Client Kanban boards side by side and confirm a card cannot be dragged from one board into the other.
 6. Give a client an unknown stage, release its Uncategorized card within that same list, and confirm the unknown YAML value and repository-defined card order remain unchanged.
 7. Remove `client_kanban: true` while its board view is open and confirm the view replaces the board with an actionable configuration error.
-<<<<<<< HEAD
 8. Click the pencil action and confirm the board Markdown opens in a separate tab while the Kanban view remains open.
 9. Make `card_fields` malformed, open it with the pencil action, correct and save the YAML, and confirm the Kanban view refreshes.
 10. Close the board tab, use the left-ribbon action to reopen it, restart Obsidian, and confirm the same remembered board still reopens.
 11. Rename the board note while its view is open, restart Obsidian, and confirm the ribbon reopens the renamed path.
 12. Create, edit, rename, and delete a direct client note and confirm the board refreshes; repeat with an unrelated or nested note and confirm it does not.
-=======
-8. Rename the board note while its view is open and confirm the view refreshes and survives a workspace reload at the renamed path.
-9. Create, edit, rename, and delete a direct client note and confirm the board refreshes; repeat with an unrelated or nested note and confirm it does not.
 
 ## Privacy and permissions
 
@@ -110,4 +97,3 @@ Report bugs and request features through the repository's GitHub Issues page. In
 ## License
 
 [MIT](LICENSE)
->>>>>>> 927a330 (git hub actions + License + clean up)

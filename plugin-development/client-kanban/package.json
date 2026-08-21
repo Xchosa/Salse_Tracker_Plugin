@@ -2,10 +2,7 @@
   "name": "client-kanban",
   "version": "1.0.0",
   "private": true,
-<<<<<<< HEAD
-=======
   "license": "MIT",
->>>>>>> 927a330 (git hub actions + License + clean up)
   "packageManager": "pnpm@10.12.4",
   "scripts": {
     "dev": "node esbuild.config.mjs",

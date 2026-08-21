@@ -1,6 +1,22 @@
-# Client Kanban
 
-Client Kanban is an open Obsidian plugin for salespeople and small teams who want each client relationship to live in one ordinary Markdown file: structured enough for a board, and detailed enough for the real conversation.
+ # Client Kanban
+
+  Client Kanban is an open-source, local-first client-management plugin for
+  Obsidian.
+
+  Instead of storing customer information in a closed CRM, every client remains an
+  ordinary Markdown file inside your vault. Client Kanban turns those files into
+  configurable boards with custom stages, columns, and card fields.
+
+  Place the vault in a shared or synchronized directory to collaborate with your
+  team using the sync solution you prefer. Because the information stays in
+  Markdown, it remains portable, searchable, versionable, and accessible to local
+  automation and AI tools.
+
+  Use compatible local LLMs to produce meeting summaries, pipeline reports, charts,
+  prioritized tasks, and follow-up recommendations—without requiring Client Kanban
+  to send your client data to an external service.
+
 
 ## One client, one Markdown file
 
